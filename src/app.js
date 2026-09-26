@@ -47,7 +47,7 @@ const {
 const path = require('path');
 const uploadRoutes = require('./modules/upload/upload.routes');
 const { UPLOAD_ROOT } = require('./modules/upload/upload.constants');
-
+const reportsRoutes = require('./modules/reports/reports.routes');
 const createApp = () => {
   const app = express();
   app.set('trust proxy', 1);
@@ -87,7 +87,7 @@ const createApp = () => {
 
   app.use(`${env.apiPrefix}/orders/staff`, orderStaffRoutes);
   app.use(`${env.apiPrefix}/orders`, orderCustomerRoutes);
-
+app.use(`${env.apiPrefix}/reports`, reportsRoutes);
   app.use(`${env.apiPrefix}/purchases`, purchaseRoutes);
   app.use(`${env.apiPrefix}/sales`, saleRoutes);
 app.use(`${env.apiPrefix}/uploads`, uploadRoutes);
