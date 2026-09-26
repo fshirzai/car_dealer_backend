@@ -2,8 +2,16 @@
 
 const path = require('path');
 
-// Where uploaded files live on disk
-const UPLOAD_ROOT = path.resolve(process.cwd(), 'uploads');
+// ------------------------------------------------------------------
+// Anchor to this file's location — NOT process.cwd()
+//
+// File lives at:  backend/src/modules/upload/upload.constants.js
+// __dirname   =   backend/src/modules/upload
+// ../../../       =   backend
+// backend/uploads =   correct upload folder
+// ------------------------------------------------------------------
+const UPLOAD_ROOT = path.resolve(__dirname, '../../../uploads');
+
 const LOGO_DIR = path.join(UPLOAD_ROOT, 'logos');
 const IMAGE_DIR = path.join(UPLOAD_ROOT, 'images');
 const VIDEO_DIR = path.join(UPLOAD_ROOT, 'videos');
@@ -38,14 +46,11 @@ const ALLOWED_VIDEO_TYPES = [
 ];
 
 const ALLOWED_DOCUMENT_TYPES = [
-  // PDFs
   'application/pdf',
-  // Images as documents (receipts, scans)
   'image/png',
   'image/jpeg',
   'image/jpg',
   'image/webp',
-  // Common office formats
   'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/vnd.ms-excel',

@@ -5,6 +5,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
 const morgan = require('morgan');
+const path = require('path');
 
 const env = require('./config/env');
 const logger = require('./config/logger');
@@ -12,6 +13,10 @@ const { apiLimiter } = require('./middleware/rateLimit.middleware');
 const { notFoundHandler, errorHandler } = require('./middleware/error.middleware');
 const ApiResponse = require('./utils/ApiResponse');
 
+// Import upload constants (for UPLOAD_ROOT path)
+const { UPLOAD_ROOT } = require('./modules/upload/upload.constants');
+
+// Route imports
 const userRoutes = require('./modules/user/user.routes');
 const authRoutes = require('./modules/auth/auth.routes');
 const customerProfileRoutes = require('./modules/customerProfile/customerProfile.routes');
@@ -44,15 +49,20 @@ const {
   publicRouter: dealershipSettingsPublic,
   adminRouter: dealershipSettingsAdmin,
 } = require('./modules/dealershipSettings/dealershipSettings.routes');
-const path = require('path');
 const uploadRoutes = require('./modules/upload/upload.routes');
-const { UPLOAD_ROOT } = require('./modules/upload/upload.constants');
 const reportsRoutes = require('./modules/reports/reports.routes');
+
 const createApp = () => {
   const app = express();
   app.set('trust proxy', 1);
 
-  app.use(helmet());
+  // ------------------------------------------------------------------
+  // Security & core middleware
+  // ------------------------------------------------------------------
+  app.use(helmet({
+    // Allow the frontend to load uploaded files cross-origin
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  }));
   app.use(cors({ origin: env.cors.origin, credentials: true }));
   app.use(compression());
   app.use(express.json({ limit: '2mb' }));
@@ -62,19 +72,40 @@ const createApp = () => {
     app.use(morgan(env.isProduction ? 'combined' : 'dev', { stream: logger.stream }));
   }
 
+  // ------------------------------------------------------------------
+  // Serve uploaded files as static assets — MUST come before /api routes
+  // ------------------------------------------------------------------
+  app.use(
+    '/uploads',
+    express.static(UPLOAD_ROOT, {
+      maxAge: '30d',            // browser cache
+      etag: true,
+      fallthrough: false,        // 404 for missing files instead of falling to error handler
+    })
+  );
+
+  // ------------------------------------------------------------------
+  // API rate limiting
+  // ------------------------------------------------------------------
   app.use(env.apiPrefix, apiLimiter);
 
+  // ------------------------------------------------------------------
+  // Health check
+  // ------------------------------------------------------------------
   app.get('/health', (_req, res) => {
     res.json(ApiResponse.success({ status: 'ok', uptime: process.uptime() }));
   });
 
+  // ------------------------------------------------------------------
+  // API Routes
+  // ------------------------------------------------------------------
   app.use(`${env.apiPrefix}/auth`, authRoutes);
   app.use(`${env.apiPrefix}/users`, userRoutes);
   app.use(`${env.apiPrefix}/customer-profiles`, customerProfileRoutes);
   app.use(`${env.apiPrefix}/sellers`, sellerRoutes);
 
-  // Vehicle sub-modules — staff first, then public
-  app.use(`${env.apiPrefix}/vehicles/staff`, vehicleProfitRoutes); // profit BEFORE other /:id
+  // Vehicles — staff routes first (they have static paths that would collide with /:id)
+  app.use(`${env.apiPrefix}/vehicles/staff`, vehicleProfitRoutes);
   app.use(`${env.apiPrefix}/vehicles/staff`, vehicleStaffRoutes);
   app.use(`${env.apiPrefix}/vehicles/staff`, vehicleImageStaffRoutes);
   app.use(`${env.apiPrefix}/vehicles/staff`, vehicleVideoStaffRoutes);
@@ -87,21 +118,24 @@ const createApp = () => {
 
   app.use(`${env.apiPrefix}/orders/staff`, orderStaffRoutes);
   app.use(`${env.apiPrefix}/orders`, orderCustomerRoutes);
-app.use(`${env.apiPrefix}/reports`, reportsRoutes);
+
   app.use(`${env.apiPrefix}/purchases`, purchaseRoutes);
   app.use(`${env.apiPrefix}/sales`, saleRoutes);
-app.use(`${env.apiPrefix}/uploads`, uploadRoutes);
+
   app.use(`${env.apiPrefix}/vehicle-expenses`, vehicleExpenseRoutes);
   app.use(`${env.apiPrefix}/general-expenses`, generalExpenseRoutes);
+
   app.use(`${env.apiPrefix}/audit-logs`, auditLogRoutes);
 
-  // Dealership settings — public path distinct from admin
-  app.use(
-    `${env.apiPrefix}/dealership-settings/public`,
-    dealershipSettingsPublic
-  );
+  app.use(`${env.apiPrefix}/dealership-settings/public`, dealershipSettingsPublic);
   app.use(`${env.apiPrefix}/dealership-settings`, dealershipSettingsAdmin);
 
+  app.use(`${env.apiPrefix}/uploads`, uploadRoutes);
+  app.use(`${env.apiPrefix}/reports`, reportsRoutes);
+
+  // ------------------------------------------------------------------
+  // 404 & error handling
+  // ------------------------------------------------------------------
   app.use(notFoundHandler);
   app.use(errorHandler);
 
